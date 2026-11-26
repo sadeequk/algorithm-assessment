@@ -4,6 +4,8 @@ Full Stack Engineer (AI-First) assessment for **Algorithm**.
 
 Full-stack Support Operations Console for an e-commerce store: a real tool-calling AI agent plus a human review dashboard.
 
+- **Live demo:** [https://algorithm-assessment.vercel.app/](https://algorithm-assessment.vercel.app/)
+- **Repository:** [https://github.com/sadeequk/algorithm-assessment](https://github.com/sadeequk/algorithm-assessment)
 - Organization: **Algorithm**
 - Language: TypeScript (Next.js App Router)
 - Database: PostgreSQL (**Sequelize**)
@@ -108,10 +110,11 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Deploy (Vercel + hosted Postgres)
 
+Deployed at [https://algorithm-assessment.vercel.app/](https://algorithm-assessment.vercel.app/).
+
 1. Create a Neon/Supabase Postgres database.
 2. Set `DATABASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL` in the host.
 3. Run `npm run db:seed` against production URL once.
 4. Deploy the Next.js app (Vercel recommended).
 
 See `ARCHITECTURE.md` for boundary, tools, failure modes, and build-vs-buy notes.
-# algorithm-assessment
