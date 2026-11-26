@@ -1,19 +1,15 @@
 import { executeRefund } from "@/lib/actions";
-import { withApi, apiFail, apiActionResult, apiCreated, jsonOk } from "@/middlewares";
+import { withApi, apiActionResult, apiCreated, jsonOk } from "@/middlewares";
 import { Order, Refund } from "@/models";
+import { refundSchemas, validateJson } from "@/validation";
 
 export const dynamic = "force-dynamic";
 
 export const POST = withApi(async (req) => {
-  const body = await req.json().catch(() => null);
-  const orderId = Number(body?.orderId);
-  const amountCents = Number(body?.amountCents);
-  const reason =
-    typeof body?.reason === "string" ? body.reason : "Direct refund API";
-
-  if (!Number.isFinite(orderId) || !Number.isFinite(amountCents)) {
-    return apiFail("orderId and amountCents are required");
-  }
+  const { orderId, amountCents, reason } = await validateJson(
+    refundSchemas.refund_post,
+    req,
+  );
 
   const result = await executeRefund({ orderId, amountCents, reason });
   if (!result.ok) {
@@ -35,18 +31,18 @@ export const GET = withApi(async () => {
   });
 
   return jsonOk({
-    refunds: refunds.map((r) => ({
+    refunds: refunds.map((r: any) => ({
       id: r.id,
       orderId: r.order_id,
       amountCents: r.amount_cents,
       status: r.status,
       reason: r.reason,
       createdAt: r.created_at,
-      order: (r as Refund & { order?: Order }).order
+      order: r.order
         ? {
-            id: (r as Refund & { order: Order }).order.id,
-            totalCents: (r as Refund & { order: Order }).order.total_cents,
-            status: (r as Refund & { order: Order }).order.status,
+            id: r.order.id,
+            totalCents: r.order.total_cents,
+            status: r.order.status,
           }
         : null,
     })),

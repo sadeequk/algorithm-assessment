@@ -1,11 +1,23 @@
 import { serializeEscalation, serializeOrder } from "@/lib/serializers";
 import { withApi, apiFail, jsonOk } from "@/middlewares";
-import { Customer, Escalation, Order, SupportRequest } from "@/models";
+import {
+  AgentRun,
+  Customer,
+  Escalation,
+  Order,
+  Refund,
+  SupportRequest,
+  ToolCall,
+} from "@/models";
+import { escalationSchemas, validate } from "@/validation";
 
 export const dynamic = "force-dynamic";
 
 export const GET = withApi(async (_req, ctx) => {
-  const { id } = await (ctx.params as Promise<{ id: string }>);
+  const { id } = validate(
+    escalationSchemas.escalation_params,
+    await ctx.params,
+  );
   const escalation = await Escalation.findByPk(id, {
     include: [
       {
@@ -14,13 +26,15 @@ export const GET = withApi(async (_req, ctx) => {
         include: [
           { model: Customer, as: "customer" },
           {
-            association: "agentRuns",
+            model: AgentRun,
+            as: "agentRuns",
             separate: true,
             limit: 1,
             order: [["started_at", "DESC"]],
             include: [
               {
-                association: "toolCalls",
+                model: ToolCall,
+                as: "toolCalls",
                 separate: true,
                 order: [["sequence", "ASC"]],
               },
@@ -44,7 +58,7 @@ export const GET = withApi(async (_req, ctx) => {
             as: "customer",
             attributes: ["id", "email", "name"],
           },
-          { association: "refunds" },
+          { model: Refund, as: "refunds" },
         ],
       })
     : null;

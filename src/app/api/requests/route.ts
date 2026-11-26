@@ -1,8 +1,15 @@
 import { SupportRequestStatus } from "@/constants";
 import { runAgentLoop } from "@/lib/agent/loop";
 import { serializeRequest } from "@/lib/serializers";
-import { withApi, jsonOk, apiCreated, apiFail } from "@/middlewares";
-import { Customer, SupportRequest } from "@/models";
+import { withApi, jsonOk, apiCreated } from "@/middlewares";
+import {
+  AgentRun,
+  Customer,
+  Escalation,
+  SupportRequest,
+  ToolCall,
+} from "@/models";
+import { requestSchemas, validateJson } from "@/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +18,17 @@ export const GET = withApi(async () => {
     order: [["created_at", "DESC"]],
     include: [
       { model: Customer, as: "customer", attributes: ["id", "email", "name"] },
-      { association: "escalation" },
+      { model: Escalation, as: "escalation" },
       {
-        association: "agentRuns",
+        model: AgentRun,
+        as: "agentRuns",
         separate: true,
         limit: 1,
         order: [["started_at", "DESC"]],
         include: [
           {
-            association: "toolCalls",
+            model: ToolCall,
+            as: "toolCalls",
             separate: true,
             order: [["sequence", "ASC"]],
           },
@@ -29,22 +38,15 @@ export const GET = withApi(async () => {
   });
 
   return jsonOk({
-    requests: requests.map((r) => serializeRequest(r as never)),
+    requests: requests.map((r: any) => serializeRequest(r)),
   });
 });
 
 export const POST = withApi(async (req) => {
-  const body = await req.json().catch(() => null);
-  const customerMessage =
-    typeof body?.customerMessage === "string" ? body.customerMessage.trim() : "";
-  const customerEmail =
-    typeof body?.customerEmail === "string"
-      ? body.customerEmail.trim().toLowerCase()
-      : undefined;
-
-  if (!customerMessage) {
-    return apiFail("customerMessage is required");
-  }
+  const { customerMessage, customerEmail } = await validateJson(
+    requestSchemas.request_post,
+    req,
+  );
 
   let customerId: string | undefined;
   if (customerEmail) {
@@ -67,12 +69,14 @@ export const POST = withApi(async (req) => {
   const full = await SupportRequest.findByPk(request.id, {
     include: [
       { model: Customer, as: "customer" },
-      { association: "escalation" },
+      { model: Escalation, as: "escalation" },
       {
-        association: "agentRuns",
+        model: AgentRun,
+        as: "agentRuns",
         include: [
           {
-            association: "toolCalls",
+            model: ToolCall,
+            as: "toolCalls",
             separate: true,
             order: [["sequence", "ASC"]],
           },

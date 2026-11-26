@@ -58,7 +58,7 @@ Data is exposed as JSON results from Sequelize queries. The agent never receives
 
 ## Concurrency
 
-**Refunds:** `SELECT … FOR UPDATE` on the order row, then insert into `Refund` with unique `order_id`. Two simultaneous refunds → one row, one error.
+**Refunds:** Sequelize `lock: UPDATE` on the order row, then insert into `Refund` with unique `order_id`. Two simultaneous refunds → one row, one error.
 
 **Approvals:** Single SQL `UPDATE … WHERE status = 'PENDING' RETURNING …`. First reviewer claims; second sees `ALREADY_RESOLVED`.
 

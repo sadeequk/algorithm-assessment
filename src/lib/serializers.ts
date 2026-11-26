@@ -1,18 +1,5 @@
-import type { AgentRun } from "@/models/agent-run.model";
-import type { Escalation } from "@/models/escalation.model";
-import type { Order } from "@/models/order.model";
-import type { SupportRequest } from "@/models/support-request.model";
-import type { ToolCall } from "@/models/tool-call.model";
-import type { Customer } from "@/models/customer.model";
-import type { Refund } from "@/models/refund.model";
 
-type RequestWithRelations = SupportRequest & {
-  customer?: Customer | null;
-  escalation?: Escalation | null;
-  agentRuns?: Array<AgentRun & { toolCalls?: ToolCall[] }>;
-};
-
-export function serializeToolCall(t: ToolCall) {
+export function serializeToolCall(t: any) {
   return {
     id: t.id,
     sequence: t.sequence,
@@ -23,7 +10,7 @@ export function serializeToolCall(t: ToolCall) {
   };
 }
 
-export function serializeAgentRun(run: AgentRun & { toolCalls?: ToolCall[] }) {
+export function serializeAgentRun(run: any) {
   return {
     id: run.id,
     supportRequestId: run.support_request_id,
@@ -36,7 +23,7 @@ export function serializeAgentRun(run: AgentRun & { toolCalls?: ToolCall[] }) {
   };
 }
 
-export function serializeRequest(r: RequestWithRelations) {
+export function serializeRequest(r: any) {
   return {
     id: r.id,
     customerId: r.customer_id,
@@ -68,11 +55,7 @@ export function serializeRequest(r: RequestWithRelations) {
   };
 }
 
-export function serializeEscalation(
-  e: Escalation & {
-    supportRequest?: RequestWithRelations;
-  },
-) {
+export function serializeEscalation(e: any) {
   return {
     id: e.id,
     supportRequestId: e.support_request_id,
@@ -92,9 +75,7 @@ export function serializeEscalation(
   };
 }
 
-export function serializeOrder(
-  o: Order & { customer?: Customer; refunds?: Refund[] },
-) {
+export function serializeOrder(o: any) {
   return {
     id: o.id,
     customerId: o.customer_id,
@@ -107,7 +88,7 @@ export function serializeOrder(
     customer: o.customer
       ? { id: o.customer.id, email: o.customer.email, name: o.customer.name }
       : undefined,
-    refunds: (o.refunds || []).map((r) => ({
+    refunds: (o.refunds || []).map((r: any) => ({
       id: r.id,
       orderId: r.order_id,
       amountCents: r.amount_cents,

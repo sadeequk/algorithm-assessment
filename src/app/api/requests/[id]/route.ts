@@ -1,22 +1,36 @@
 import { serializeOrder, serializeRequest } from "@/lib/serializers";
 import { withApi, apiFail, jsonOk } from "@/middlewares";
-import { Customer, Order, SupportRequest } from "@/models";
+import {
+  AgentRun,
+  Customer,
+  Escalation,
+  Order,
+  Refund,
+  SupportRequest,
+  ToolCall,
+} from "@/models";
+import { requestSchemas, validate } from "@/validation";
 
 export const dynamic = "force-dynamic";
 
 export const GET = withApi(async (_req, ctx) => {
-  const { id } = await (ctx.params as Promise<{ id: string }>);
+  const { id } = validate(
+    requestSchemas.request_get_params,
+    await ctx.params,
+  );
   const request = await SupportRequest.findByPk(id, {
     include: [
       { model: Customer, as: "customer" },
-      { association: "escalation" },
+      { model: Escalation, as: "escalation" },
       {
-        association: "agentRuns",
+        model: AgentRun,
+        as: "agentRuns",
         separate: true,
         order: [["started_at", "DESC"]],
         include: [
           {
-            association: "toolCalls",
+            model: ToolCall,
+            as: "toolCalls",
             separate: true,
             order: [["sequence", "ASC"]],
           },
@@ -30,11 +44,7 @@ export const GET = withApi(async (_req, ctx) => {
   }
 
   let order = null;
-  const esc = (
-    request as SupportRequest & {
-      escalation?: { proposed_payload?: { orderId?: number } };
-    }
-  ).escalation;
+  const esc = (request as any).escalation;
 
   if (esc?.proposed_payload?.orderId) {
     const found = await Order.findByPk(esc.proposed_payload.orderId, {
@@ -44,7 +54,7 @@ export const GET = withApi(async (_req, ctx) => {
           as: "customer",
           attributes: ["id", "email", "name"],
         },
-        { association: "refunds" },
+        { model: Refund, as: "refunds" },
       ],
     });
     order = found ? serializeOrder(found as never) : null;

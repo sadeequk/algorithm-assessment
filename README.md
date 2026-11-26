@@ -15,7 +15,7 @@ Full-stack Support Operations Console for an e-commerce store: a real tool-calli
 
 - **Agent loop** — LLM chooses tools; sequence is not hardcoded (see `src/lib/agent/loop.ts`)
 - **Guardrails in code** — `src/lib/guardrails.ts` + `src/lib/actions.ts`
-- **Double-refund protection** — unique `order_id` on `refunds` + `SELECT FOR UPDATE`
+- **Double-refund protection** — unique `order_id` on `refunds` + Sequelize row lock
 - **Double-approve protection** — conditional `UPDATE … WHERE status = 'PENDING'`
 - **Traceability** — requests, agent runs, tool calls, escalations, refunds in Postgres
 

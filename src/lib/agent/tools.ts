@@ -6,7 +6,7 @@ import {
 } from "@/constants";
 import { executeCancel } from "@/lib/actions";
 import { isAutoCancelEligible } from "@/lib/guardrails";
-import { Customer, Escalation, Order, SupportRequest } from "@/models";
+import { Customer, Escalation, Order, Refund, SupportRequest } from "@/models";
 
 export const toolDefinitions = [
   {
@@ -132,16 +132,13 @@ export async function executeTool(
       const order = await Order.findByPk(orderId, {
         include: [
           { model: Customer, as: "customer", attributes: ["id", "email", "name"] },
-          { association: "refunds" },
+          { model: Refund, as: "refunds" },
         ],
       });
       if (!order) {
         return { found: false, error: "ORDER_NOT_FOUND", orderId };
       }
-      const json = order.toJSON() as Order & {
-        customer: { id: string; email: string; name: string };
-        refunds: Array<{ id: string }>;
-      };
+      const json = order.toJSON() as any;
       return {
         found: true,
         order: {
@@ -167,7 +164,7 @@ export async function executeTool(
           {
             model: Order,
             as: "orders",
-            include: [{ association: "refunds" }],
+            include: [{ model: Refund, as: "refunds" }],
           },
         ],
         order: [[{ model: Order, as: "orders" }, "created_at", "DESC"]],
@@ -175,15 +172,11 @@ export async function executeTool(
       if (!customer) {
         return { found: false, error: "CUSTOMER_NOT_FOUND", email };
       }
-      const c = customer.toJSON() as Customer & {
-        orders: Array<
-          Order & { refunds: Array<{ id: string }> }
-        >;
-      };
+      const c = customer.toJSON() as any;
       return {
         found: true,
         customer: { id: c.id, email: c.email, name: c.name },
-        orders: (c.orders || []).map((o) => ({
+        orders: (c.orders || []).map((o: any) => ({
           id: o.id,
           status: o.status,
           totalCents: o.total_cents,
@@ -244,7 +237,7 @@ export async function executeTool(
       }
 
       const order = await Order.findByPk(args.orderId, {
-        include: [{ association: "refunds" }],
+        include: [{ model: Refund, as: "refunds" }],
       });
       if (!order) {
         return {

@@ -8,7 +8,13 @@ import {
   summarizeTool,
   toolDisplayName,
 } from "@/lib/format";
-import { Customer, SupportRequest } from "@/models";
+import {
+  AgentRun,
+  Customer,
+  Escalation,
+  SupportRequest,
+  ToolCall,
+} from "@/models";
 
 export const dynamic = "force-dynamic";
 
@@ -22,14 +28,16 @@ export default async function RequestDetailPage({
   const request = await SupportRequest.findByPk(id, {
     include: [
       { model: Customer, as: "customer" },
-      { association: "escalation" },
+      { model: Escalation, as: "escalation" },
       {
-        association: "agentRuns",
+        model: AgentRun,
+        as: "agentRuns",
         separate: true,
         order: [["started_at", "DESC"]],
         include: [
           {
-            association: "toolCalls",
+            model: ToolCall,
+            as: "toolCalls",
             separate: true,
             order: [["sequence", "ASC"]],
           },
@@ -40,24 +48,7 @@ export default async function RequestDetailPage({
 
   if (!request) notFound();
 
-  const row = request as SupportRequest & {
-    customer?: { name: string; email: string } | null;
-    escalation?: { id: string } | null;
-    agentRuns?: Array<{
-      id: string;
-      status: string;
-      reasoning_summary: string | null;
-      final_outcome: string | null;
-      started_at?: Date;
-      toolCalls?: Array<{
-        id: string;
-        sequence: number;
-        tool_name: string;
-        tool_arguments: unknown;
-        result: unknown;
-      }>;
-    }>;
-  };
+  const row = request as any;
 
   return (
     <div className="stack">
@@ -104,7 +95,7 @@ export default async function RequestDetailPage({
         )}
       </div>
 
-      {(row.agentRuns || []).map((run) => {
+      {(row.agentRuns || []).map((run: any) => {
         const summary = humanizeAgentText(run.reasoning_summary, 400);
         return (
           <div className="panel" key={run.id}>
@@ -119,7 +110,7 @@ export default async function RequestDetailPage({
               {(run.toolCalls || []).length === 0 ? (
                 <p className="muted">No tool calls recorded.</p>
               ) : (
-                (run.toolCalls || []).map((t) => (
+                (run.toolCalls || []).map((t: any) => (
                   <div className="tool-step" key={t.id}>
                     <div className="tool-step-head">
                       <span className="tool-step-num">{t.sequence}</span>

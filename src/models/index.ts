@@ -1,19 +1,21 @@
 import { sequelize } from "@/lib/db";
-import { initCustomer, Customer } from "./customer.model";
-import { initOrder, Order } from "./order.model";
-import { initRefund, Refund } from "./refund.model";
-import { initSupportRequest, SupportRequest } from "./support-request.model";
-import { initAgentRun, AgentRun } from "./agent-run.model";
-import { initToolCall, ToolCall } from "./tool-call.model";
-import { initEscalation, Escalation } from "./escalation.model";
 
-initCustomer(sequelize);
-initOrder(sequelize);
-initRefund(sequelize);
-initSupportRequest(sequelize);
-initAgentRun(sequelize);
-initToolCall(sequelize);
-initEscalation(sequelize);
+import CustomerModel from "./customer.model";
+import OrderModel from "./order.model";
+import RefundModel from "./refund.model";
+import SupportRequestModel from "./support-request.model";
+import AgentRunModel from "./agent-run.model";
+import ToolCallModel from "./tool-call.model";
+import EscalationModel from "./escalation.model";
+
+
+const Customer: any = CustomerModel(sequelize);
+const Order: any = OrderModel(sequelize);
+const Refund: any = RefundModel(sequelize);
+const SupportRequest: any = SupportRequestModel(sequelize);
+const AgentRun: any = AgentRunModel(sequelize);
+const ToolCall: any = ToolCallModel(sequelize);
+const Escalation: any = EscalationModel(sequelize);
 
 Customer.hasMany(Order, { foreignKey: "customer_id", as: "orders" });
 Order.belongsTo(Customer, { foreignKey: "customer_id", as: "customer" });
@@ -22,7 +24,10 @@ Order.hasMany(Refund, { foreignKey: "order_id", as: "refunds" });
 Refund.belongsTo(Order, { foreignKey: "order_id", as: "order" });
 
 Customer.hasMany(SupportRequest, { foreignKey: "customer_id", as: "requests" });
-SupportRequest.belongsTo(Customer, { foreignKey: "customer_id", as: "customer" });
+SupportRequest.belongsTo(Customer, {
+  foreignKey: "customer_id",
+  as: "customer",
+});
 
 SupportRequest.hasMany(AgentRun, {
   foreignKey: "support_request_id",

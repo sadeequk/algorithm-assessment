@@ -3,7 +3,7 @@ import { SupportRequestStatus } from "@/constants";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ensureDb } from "@/lib/db";
 import { formatWhen, humanizeAgentText } from "@/lib/format";
-import { Customer, SupportRequest } from "@/models";
+import { AgentRun, Customer, Escalation, SupportRequest } from "@/models";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +13,10 @@ export default async function QueuePage() {
     order: [["created_at", "DESC"]],
     include: [
       { model: Customer, as: "customer", attributes: ["email", "name"] },
-      { association: "escalation" },
+      { model: Escalation, as: "escalation" },
       {
-        association: "agentRuns",
+        model: AgentRun,
+        as: "agentRuns",
         separate: true,
         limit: 1,
         order: [["started_at", "DESC"]],
@@ -51,23 +52,15 @@ export default async function QueuePage() {
           </div>
         ) : (
           <div className="queue-list">
-            {requests.map((r) => {
-              const row = r as SupportRequest & {
-                customer?: { name: string; email: string } | null;
-                escalation?: {
-                  id: string;
-                  proposed_action: string;
-                  escalation_reason: string;
-                } | null;
-                agentRuns?: Array<{ reasoning_summary?: string | null }>;
-              };
+            {requests.map((r: any) => {
+              const row = r;
               const run = row.agentRuns?.[0];
               const decisionLabel =
                 row.status === SupportRequestStatus.ESCALATED
                   ? `Escalate · ${row.escalation?.proposed_action ?? "?"}`
                   : row.status === SupportRequestStatus.AUTO_RESOLVED
                     ? "Executed automatically"
-                    : row.status.replaceAll("_", " ");
+                    : String(row.status).replaceAll("_", " ");
 
               const note =
                 row.escalation?.escalation_reason ||

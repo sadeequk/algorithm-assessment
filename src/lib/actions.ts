@@ -1,4 +1,4 @@
-import { QueryTypes, UniqueConstraintError } from "sequelize";
+import { UniqueConstraintError } from "sequelize";
 import type { Transaction } from "sequelize";
 import {
   EscalationStatus,
@@ -62,47 +62,16 @@ export async function approveEscalation(input: {
 }): Promise<ActionResult> {
   try {
     return await sequelize.transaction(async (tx) => {
-      const rows = await sequelize.query<{
-        id: string;
-        support_request_id: string;
-        proposed_action: ProposedActionType;
-        proposed_payload: {
-          orderId: number;
-          amountCents?: number;
-          reason?: string;
-        };
-        version: number;
-      }>(
-        `
-        UPDATE escalations
-        SET
-          status = :approved,
-          resolved_by = :reviewer,
-          resolved_at = NOW(),
-          version = version + 1,
-          updated_at = NOW()
-        WHERE id = :id
-          AND status = :pending
-        RETURNING
-          id,
-          support_request_id,
-          proposed_action,
-          proposed_payload,
-          version
-        `,
-        {
-          replacements: {
-            id: input.escalationId,
-            reviewer: input.reviewer,
-            approved: EscalationStatus.APPROVED,
-            pending: EscalationStatus.PENDING,
-          },
-          transaction: tx,
-          type: QueryTypes.SELECT,
+      const esc = await Escalation.findOne({
+        where: {
+          id: input.escalationId,
+          status: EscalationStatus.PENDING,
         },
-      );
+        transaction: tx,
+        lock: tx.LOCK.UPDATE,
+      });
 
-      if (!rows.length) {
+      if (!esc) {
         const current = await Escalation.findByPk(input.escalationId, {
           transaction: tx,
         });
@@ -115,8 +84,21 @@ export async function approveEscalation(input: {
         };
       }
 
-      const esc = rows[0];
-      const payload = esc.proposed_payload;
+      await esc.update(
+        {
+          status: EscalationStatus.APPROVED,
+          resolved_by: input.reviewer,
+          resolved_at: new Date(),
+          version: esc.version + 1,
+        },
+        { transaction: tx },
+      );
+
+      const payload = esc.proposed_payload as {
+        orderId: number;
+        amountCents?: number;
+        reason?: string;
+      };
       const request = await SupportRequest.findByPk(esc.support_request_id, {
         transaction: tx,
       });
@@ -167,7 +149,7 @@ export async function approveEscalation(input: {
 
       return {
         ok: true as const,
-        data: { escalation: esc, action: actionResult.data },
+        data: { escalation: esc.toJSON(), action: actionResult.data },
       };
     });
   } catch (err) {
@@ -182,56 +164,52 @@ export async function rejectEscalation(input: {
   escalationId: string;
   reviewer: string;
 }): Promise<ActionResult> {
-  const rows = await sequelize.query<{
-    id: string;
-    support_request_id: string;
-  }>(
-    `
-    UPDATE escalations
-    SET
-      status = :rejected,
-      resolved_by = :reviewer,
-      resolved_at = NOW(),
-      version = version + 1,
-      updated_at = NOW()
-    WHERE id = :id
-      AND status = :pending
-    RETURNING id, support_request_id
-    `,
-    {
-      replacements: {
+  return sequelize.transaction(async (tx) => {
+    const esc = await Escalation.findOne({
+      where: {
         id: input.escalationId,
-        reviewer: input.reviewer,
-        rejected: EscalationStatus.REJECTED,
-        pending: EscalationStatus.PENDING,
+        status: EscalationStatus.PENDING,
       },
-      type: QueryTypes.SELECT,
-    },
-  );
+      transaction: tx,
+      lock: tx.LOCK.UPDATE,
+    });
 
-  if (!rows.length) {
-    const current = await Escalation.findByPk(input.escalationId);
+    if (!esc) {
+      const current = await Escalation.findByPk(input.escalationId, {
+        transaction: tx,
+      });
+      return {
+        ok: false as const,
+        code: GUARDRAIL_CODE.ALREADY_RESOLVED,
+        message: current
+          ? `Escalation already ${current.status.toLowerCase()}.`
+          : "Escalation not found.",
+      };
+    }
+
+    await esc.update(
+      {
+        status: EscalationStatus.REJECTED,
+        resolved_by: input.reviewer,
+        resolved_at: new Date(),
+        version: esc.version + 1,
+      },
+      { transaction: tx },
+    );
+
+    await SupportRequest.update(
+      {
+        status: SupportRequestStatus.REJECTED,
+        outcome_summary: `Rejected by ${input.reviewer}`,
+      },
+      { where: { id: esc.support_request_id }, transaction: tx },
+    );
+
     return {
-      ok: false,
-      code: GUARDRAIL_CODE.ALREADY_RESOLVED,
-      message: current
-        ? `Escalation already ${current.status.toLowerCase()}.`
-        : "Escalation not found.",
+      ok: true as const,
+      data: { id: esc.id, status: EscalationStatus.REJECTED },
     };
-  }
-
-  await SupportRequest.update(
-    {
-      status: SupportRequestStatus.REJECTED,
-      outcome_summary: `Rejected by ${input.reviewer}`,
-    },
-    { where: { id: rows[0].support_request_id } },
-  );
-
-  return {
-    ok: true,
-    data: { id: rows[0].id, status: EscalationStatus.REJECTED },
-  };
+  });
 }
 
 async function executeRefundInTx(
@@ -244,26 +222,12 @@ async function executeRefundInTx(
     actingCustomerId?: string | null;
   },
 ): Promise<ActionResult> {
-  const rows = await sequelize.query<{
-    id: number;
-    status: OrderStatus;
-    total_cents: number;
-    customer_id: string;
-  }>(
-    `
-    SELECT id, status, total_cents, customer_id
-    FROM orders
-    WHERE id = :orderId
-    FOR UPDATE
-    `,
-    {
-      replacements: { orderId: input.orderId },
-      transaction: tx,
-      type: QueryTypes.SELECT,
-    },
-  );
+  const order = await Order.findByPk(input.orderId, {
+    transaction: tx,
+    lock: tx.LOCK.UPDATE,
+  });
 
-  if (!rows.length) {
+  if (!order) {
     return {
       ok: false,
       code: GUARDRAIL_CODE.ORDER_NOT_FOUND,
@@ -271,7 +235,6 @@ async function executeRefundInTx(
     };
   }
 
-  const order = rows[0];
   const existing = await Refund.findOne({
     where: { order_id: input.orderId },
     transaction: tx,
@@ -325,25 +288,12 @@ async function executeCancelInTx(
     actingCustomerId?: string | null;
   },
 ): Promise<ActionResult> {
-  const rows = await sequelize.query<{
-    id: number;
-    status: OrderStatus;
-    customer_id: string;
-  }>(
-    `
-    SELECT id, status, customer_id
-    FROM orders
-    WHERE id = :orderId
-    FOR UPDATE
-    `,
-    {
-      replacements: { orderId: input.orderId },
-      transaction: tx,
-      type: QueryTypes.SELECT,
-    },
-  );
+  const order = await Order.findByPk(input.orderId, {
+    transaction: tx,
+    lock: tx.LOCK.UPDATE,
+  });
 
-  if (!rows.length) {
+  if (!order) {
     return {
       ok: false,
       code: GUARDRAIL_CODE.ORDER_NOT_FOUND,
@@ -351,11 +301,10 @@ async function executeCancelInTx(
     };
   }
 
-  const row = rows[0];
   try {
     assertCancelAllowed({
-      orderStatus: row.status,
-      orderCustomerId: row.customer_id,
+      orderStatus: order.status,
+      orderCustomerId: order.customer_id,
       actingCustomerId: input.actingCustomerId,
     });
   } catch (err) {
@@ -365,18 +314,7 @@ async function executeCancelInTx(
     throw err;
   }
 
-  const order = await Order.findByPk(input.orderId, { transaction: tx });
-  if (!order) {
-    return {
-      ok: false,
-      code: GUARDRAIL_CODE.ORDER_NOT_FOUND,
-      message: `Order ${input.orderId} not found.`,
-    };
-  }
-  await order.update(
-    { status: OrderStatus.CANCELLED },
-    { transaction: tx },
-  );
+  await order.update({ status: OrderStatus.CANCELLED }, { transaction: tx });
 
   return {
     ok: true,
